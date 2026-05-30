@@ -19,8 +19,25 @@ import { useMatchStore } from '../store/useMatchStore';
 const { width } = Dimensions.get('window');
 
 const ROSTER_PLAYERS = [
-  { id: 'roster-1', name: 'Himanshu', image: require('../assets/images/himanshu.jpg') },
-  { id: 'roster-2', name: 'Shivam', image: require('../assets/images/shivam.jpg') },
+  { id: 'roster-1', name: 'Anup', image: require('../assets/images/anup.jpg') },
+  { id: 'roster-2', name: 'Banti', image: require('../assets/images/banti.jpg') },
+  { id: 'roster-3', name: 'Gaurav', image: require('../assets/images/gaurav.jpg') },
+  { id: 'roster-4', name: 'Himanshu', image: require('../assets/images/himanshu.jpg') },
+  { id: 'roster-5', name: 'Himanshu Varma', image: require('../assets/images/himanshu_varma.jpg') },
+  { id: 'roster-6', name: 'Karan', image: require('../assets/images/karan.jpg') },
+  { id: 'roster-7', name: 'Keshav', image: require('../assets/images/keshav.jpg') },
+  { id: 'roster-8', name: 'Kunal', image: require('../assets/images/kunal.jpg') },
+  { id: 'roster-9', name: 'Lokesh', image: require('../assets/images/lokesh.jpg') },
+  { id: 'roster-10', name: 'Nitish', image: require('../assets/images/nitish.jpg') },
+  { id: 'roster-11', name: 'Priyanshu', image: require('../assets/images/priyanshu.jpg') },
+  { id: 'roster-12', name: 'Rahul', image: require('../assets/images/rahul.jpg') },
+  { id: 'roster-13', name: 'Rajiv', image: require('../assets/images/rajiv.jpg') },
+  { id: 'roster-14', name: 'Ranjan', image: require('../assets/images/ranjan.jpg') },
+  { id: 'roster-15', name: 'Roshan Potta', image: require('../assets/images/roshan_potta.jpg') },
+  { id: 'roster-16', name: 'Roshan Varma', image: require('../assets/images/roshan_varma.jpg') },
+  { id: 'roster-17', name: 'Shivam', image: require('../assets/images/shivam.jpg') },
+  { id: 'roster-18', name: 'Shivam Singh', image: require('../assets/images/shivam_singh.jpg') },
+  { id: 'roster-19', name: 'Vicky', image: require('../assets/images/vicky.jpg') },
 ];
 
 // ==========================================
@@ -247,9 +264,9 @@ const DialButton = React.memo(({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
-          width: 60,
-          height: 60,
-          borderRadius: 30,
+          width: 44,
+          height: 44,
+          borderRadius: 22,
           borderWidth: 2,
           borderColor: '#362E27',
           justifyContent: 'center',
@@ -262,14 +279,14 @@ const DialButton = React.memo(({
           style={{
             width: '100%',
             height: '100%',
-            borderRadius: 28,
+            borderRadius: 20,
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 1,
             borderColor: 'rgba(255, 255, 255, 0.08)',
           }}
         >
-          <MaterialCommunityIcons name={icon as any} size={26} color="#D2C5B9" />
+          <MaterialCommunityIcons name={icon as any} size={20} color="#D2C5B9" />
         </LinearGradient>
       </LinearGradient>
     </TouchableOpacity>
@@ -485,7 +502,7 @@ const StadiumBackground = React.memo(() => {
 });
 
 // Memoized Player Input Row for Smooth Typing
-const MemoizedPlayerInputRow = React.memo(({ player, expandedTeam, updatePlayer, idx }: any) => {
+const MemoizedPlayerInputRow = React.memo(({ player, expandedTeam, updatePlayer, setCaptain, idx }: any) => {
   const [localName, setLocalName] = useState(player.name);
   
   React.useEffect(() => {
@@ -493,12 +510,20 @@ const MemoizedPlayerInputRow = React.memo(({ player, expandedTeam, updatePlayer,
   }, [player.name]);
 
   return (
-    <View style={styles.playerInputRow}>
+    <View style={[styles.playerInputRow, player.isCaptain && { borderColor: 'rgba(245, 166, 35, 0.4)', backgroundColor: 'rgba(245, 166, 35, 0.05)' }]}>
       {player.image ? (
-        <View style={{ position: 'relative', marginRight: 10 }}>
-          <Image source={player.image} style={{ width: 22, height: 22, borderRadius: 11 }} />
+        <TouchableOpacity 
+          style={{ position: 'relative', marginRight: 10 }}
+          onPress={() => setCaptain(expandedTeam, player.id)}
+        >
+          <Image source={player.image} style={[{ width: 22, height: 22, borderRadius: 11 }, player.isCaptain && { borderWidth: 1.5, borderColor: '#F5A623' }]} />
+          {player.isCaptain && (
+            <View style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: '#F5A623', borderRadius: 8, width: 14, height: 14, justifyContent: 'center', alignItems: 'center', zIndex: 10, borderWidth: 1, borderColor: '#1F293D' }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: '#0B1120' }}>C</Text>
+            </View>
+          )}
           <TouchableOpacity 
-            style={{ position: 'absolute', top: -6, left: -6, backgroundColor: '#FF4757', borderRadius: 8, width: 14, height: 14, justifyContent: 'center', alignItems: 'center', zIndex: 10 }}
+            style={{ position: 'absolute', top: -6, left: -6, backgroundColor: '#FF4757', borderRadius: 8, width: 14, height: 14, justifyContent: 'center', alignItems: 'center', zIndex: 11 }}
             onPress={() => {
               setLocalName(`Player ${idx + 1}`);
               updatePlayer(expandedTeam, player.id, `Player ${idx + 1}`, null);
@@ -506,11 +531,18 @@ const MemoizedPlayerInputRow = React.memo(({ player, expandedTeam, updatePlayer,
           >
             <MaterialCommunityIcons name="close" size={10} color="#FFF" />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       ) : (
-        <View style={styles.playerNumberBadge}>
-          <Text style={styles.playerNumberText}>{idx + 1}</Text>
-        </View>
+        <TouchableOpacity 
+          style={[styles.playerNumberBadge, player.isCaptain && { backgroundColor: 'rgba(245, 166, 35, 0.2)', borderWidth: 1, borderColor: '#F5A623' }]}
+          onPress={() => setCaptain(expandedTeam, player.id)}
+        >
+          {player.isCaptain ? (
+            <Text style={[styles.playerNumberText, { color: '#F5A623' }]}>C</Text>
+          ) : (
+            <Text style={styles.playerNumberText}>{idx + 1}</Text>
+          )}
+        </TouchableOpacity>
       )}
       <RNTextInput
         value={localName}
@@ -520,6 +552,17 @@ const MemoizedPlayerInputRow = React.memo(({ player, expandedTeam, updatePlayer,
         placeholderTextColor="rgba(255,255,255,0.3)"
         placeholder={`Player ${idx + 1}`}
       />
+      <TouchableOpacity 
+        style={{ paddingHorizontal: 4 }}
+        onPress={() => setCaptain(expandedTeam, player.id)}
+      >
+        <MaterialCommunityIcons 
+          name={player.isCaptain ? "star" : "star-outline"} 
+          size={18} 
+          color={player.isCaptain ? "#F5A623" : "rgba(255,255,255,0.2)"} 
+          style={{ marginRight: 6 }}
+        />
+      </TouchableOpacity>
       <MaterialCommunityIcons name="pencil" size={16} color="rgba(255,255,255,0.2)" />
     </View>
   );
@@ -536,7 +579,7 @@ MemoizedPlayerInputRow.displayName = 'MemoizedPlayerInputRow';
 
 export default function StartMatchScreen() {
   const router = useRouter();
-  const { setupMatch, team1Players, team2Players, setPlayerCount, updatePlayer } = useMatchStore();
+  const { setupMatch, team1Players, team2Players, setPlayerCount, updatePlayer, setCaptain } = useMatchStore();
 
   const [team1, setTeam1] = useState('Team A');
   const [team2, setTeam2] = useState('Team B');
@@ -746,6 +789,7 @@ export default function StartMatchScreen() {
                     player={player}
                     expandedTeam={expandedTeam}
                     updatePlayer={updatePlayer}
+                    setCaptain={setCaptain}
                     idx={idx}
                   />
                 ))}
@@ -820,7 +864,7 @@ export default function StartMatchScreen() {
               style={styles.capCardGradient}
             >
               {tossWinner === 'Team A' && <ActiveCheckBadge />}
-              <View style={styles.capGlowWrap}>
+              <View style={[styles.capGlowWrap, { transform: [{ scale: 0.8 }] }]}>
                 <CricketCap color="#4AC29A" />
               </View>
               <Text style={styles.capTeamName}>{team1.trim() || 'Team A'}</Text>
@@ -841,7 +885,7 @@ export default function StartMatchScreen() {
               style={styles.capCardGradient}
             >
               {tossWinner === 'Team B' && <ActiveCheckBadge />}
-              <View style={styles.capGlowWrap}>
+              <View style={[styles.capGlowWrap, { transform: [{ scale: 0.8 }] }]}>
                 <CricketCap color="#6C8AFF" />
               </View>
               <Text style={styles.capTeamName}>{team2.trim() || 'Team B'}</Text>
@@ -869,7 +913,7 @@ export default function StartMatchScreen() {
             >
               {optTo === 'bat' && <ActiveCheckBadge />}
               <View style={styles.decisionIconWrap}>
-                <CricketBat size={50} />
+                <CricketBat size={36} />
               </View>
               <Text style={[styles.decisionText, optTo === 'bat' && styles.decisionTextActive]}>
                 BAT
@@ -892,7 +936,7 @@ export default function StartMatchScreen() {
             >
               {optTo === 'bowl' && <ActiveCheckBadge />}
               <View style={styles.decisionIconWrap}>
-                <LeatherBall size={38} />
+                <LeatherBall size={28} />
               </View>
               <Text style={[styles.decisionText, optTo === 'bowl' && styles.decisionTextActive]}>
                 BOWL
@@ -1136,12 +1180,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(21, 34, 56, 0.45)',
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.05)',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    gap: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
@@ -1150,10 +1194,10 @@ const styles = StyleSheet.create({
   },
   oversCenterDisplay: {
     alignItems: 'center',
-    minWidth: 120,
+    minWidth: 100,
   },
   oversNumber: {
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: '900',
     color: '#FDE484',
     textShadowColor: 'rgba(253, 228, 132, 0.25)',
@@ -1191,7 +1235,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   capCardGradient: {
-    paddingVertical: 20,
+    paddingVertical: 12,
     alignItems: 'center',
     position: 'relative',
   },
@@ -1208,10 +1252,10 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   capTeamName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: 'rgba(255,255,255,0.7)',
-    marginTop: 10,
+    marginTop: 4,
     textAlign: 'center',
     paddingHorizontal: 8,
   },
@@ -1236,22 +1280,22 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   decisionGradient: {
-    paddingVertical: 18,
+    paddingVertical: 12,
     alignItems: 'center',
     position: 'relative',
-    minHeight: 110,
+    minHeight: 80,
     justifyContent: 'center',
   },
   decisionIconWrap: {
-    height: 52,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
   decisionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: 'rgba(255,255,255,0.4)',
-    marginTop: 8,
+    marginTop: 4,
     letterSpacing: 0.5,
   },
   decisionTextActive: {

@@ -7,6 +7,7 @@ export interface Player {
   id: string;
   name: string;
   image?: any;
+  isCaptain?: boolean;
 }
 
 export interface Delivery {
@@ -57,6 +58,7 @@ export interface MatchState {
   removePlayer: (team: 'team1' | 'team2', playerId: string) => void;
   updatePlayer: (team: 'team1' | 'team2', playerId: string, name: string, image?: any) => void;
   setPlayerCount: (team: 'team1' | 'team2', count: number) => void;
+  setCaptain: (team: 'team1' | 'team2', playerId: string) => void;
 
   // Match actions
   setupMatch: (team1: string, team2: string, tossWinner: string, optTo: 'bat' | 'bowl', totalOvers: number) => void;
@@ -138,6 +140,16 @@ export const useMatchStore = create<MatchState>((set) => ({
       return { [key]: [...current, ...newPlayers] };
     }
     return { [key]: current.slice(0, count) };
+  }),
+
+  setCaptain: (team, playerId) => set((state) => {
+    const key = team === 'team1' ? 'team1Players' : 'team2Players';
+    return {
+      [key]: state[key].map((p) => ({
+        ...p,
+        isCaptain: p.id === playerId,
+      })),
+    };
   }),
 
   setupMatch: (team1, team2, tossWinner, optTo, totalOvers) => set((state) => ({
