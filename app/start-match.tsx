@@ -626,12 +626,18 @@ export default function StartMatchScreen() {
 
   const handleIncrement = (team: 'team1' | 'team2') => {
     const current = team === 'team1' ? team1Players.length : team2Players.length;
-    if (current < 15) setPlayerCount(team, current + 1);
+    if (current < 15) {
+      setPlayerCount('team1', current + 1);
+      setPlayerCount('team2', current + 1);
+    }
   };
 
   const handleDecrement = (team: 'team1' | 'team2') => {
     const current = team === 'team1' ? team1Players.length : team2Players.length;
-    if (current > 2) setPlayerCount(team, current - 1);
+    if (current > 2) {
+      setPlayerCount('team1', current - 1);
+      setPlayerCount('team2', current - 1);
+    }
   };
 
   // Overs Custom Labels

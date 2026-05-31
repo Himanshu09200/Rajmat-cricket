@@ -19,6 +19,8 @@ export interface Delivery {
   wicketType?: WicketType;
   overIndex: number;
   ballIndex: number;
+  strikerName?: string;
+  bowlerName?: string;
 }
 
 export interface MatchState {
@@ -47,6 +49,10 @@ export interface MatchState {
   striker: string;
   nonStriker: string;
   bowler: string;
+  openersSelected: boolean;
+  dismissedBatsmen: string[];
+  needsNewBatsman: boolean;
+  needsNewBowler: boolean;
 
   // Match Flow
   targetScore: number;
@@ -62,6 +68,9 @@ export interface MatchState {
 
   // Match actions
   setupMatch: (team1: string, team2: string, tossWinner: string, optTo: 'bat' | 'bowl', totalOvers: number) => void;
+  setOpeners: (striker: string, nonStriker: string) => void;
+  setNextBatsman: (playerName: string) => void;
+  setBowler: (playerName: string) => void;
   addDelivery: (runs: number, type: DeliveryType, isWicket: boolean, extras?: number, wicketType?: WicketType) => void;
   undoLastDelivery: () => void;
   endInnings: () => void;
@@ -100,6 +109,10 @@ export const useMatchStore = create<MatchState>((set) => ({
   striker: 'Player 1',
   nonStriker: 'Player 2',
   bowler: 'Bowler 1',
+  openersSelected: false,
+  dismissedBatsmen: [],
+  needsNewBatsman: false,
+  needsNewBowler: true,
 
   targetScore: 0,
   matchStatus: 'ongoing',
@@ -184,7 +197,30 @@ export const useMatchStore = create<MatchState>((set) => ({
     targetScore: 0,
     matchStatus: 'ongoing',
     matchResult: '',
+    openersSelected: false,
+    needsNewBowler: true,
   })),
+
+  setOpeners: (striker, nonStriker) => set({
+    striker,
+    nonStriker,
+    openersSelected: true,
+  }),
+
+  setNextBatsman: (playerName) => set((state) => {
+    // If the striker is empty, they take the striker's end. 
+    // If non-striker is empty, they take the non-striker's end.
+    return {
+      striker: state.striker === '' ? playerName : state.striker,
+      nonStriker: state.nonStriker === '' ? playerName : state.nonStriker,
+      needsNewBatsman: false,
+    };
+  }),
+
+  setBowler: (playerName) => set({
+    bowler: playerName,
+    needsNewBowler: false,
+  }),
 
   addDelivery: (runs, type, isWicket, extras = 0, wicketType) =>
     set((state) => {
@@ -226,6 +262,8 @@ export const useMatchStore = create<MatchState>((set) => ({
         wicketType,
         overIndex: state.overs,
         ballIndex: state.balls,
+        strikerName: state.striker,
+        bowlerName: state.bowler,
       };
 
       const newDeliveries = [...state.deliveries, delivery];
@@ -264,6 +302,49 @@ export const useMatchStore = create<MatchState>((set) => ({
         matchStatus: newMatchStatus,
         matchResult: newMatchResult,
         targetScore: newTargetScore,
+        needsNewBowler: (isLegal && newBalls === 0 && newOvers > state.overs),
+        // Strike rotation logic
+        ...(() => {
+          let currentStriker = state.striker;
+          let currentNonStriker = state.nonStriker;
+          let dismissed = [...state.dismissedBatsmen];
+          let needsNew = false;
+
+          // If wicket fell, dismiss the striker
+          if (isWicket) {
+            dismissed.push(currentStriker);
+            needsNew = true;
+            // Don't rotate on wicket - new batsman will replace striker
+            // But still check for end of over swap
+            if (isLegal && newBalls === 0 && newOvers > state.overs) {
+              // End of over: non-striker goes to striker end
+              currentStriker = currentNonStriker;
+              currentNonStriker = ''; // will be replaced by new batsman
+            } else {
+              currentStriker = ''; // will be replaced by new batsman
+            }
+          } else {
+            // Determine runs for strike rotation
+            const runsForRotation = type === 'wide' ? 0 : runs;
+
+            // Swap on odd runs
+            if (runsForRotation % 2 === 1) {
+              [currentStriker, currentNonStriker] = [currentNonStriker, currentStriker];
+            }
+
+            // Swap at end of over (after 6 legal balls)
+            if (isLegal && newBalls === 0 && newOvers > state.overs) {
+              [currentStriker, currentNonStriker] = [currentNonStriker, currentStriker];
+            }
+          }
+
+          return {
+            striker: currentStriker,
+            nonStriker: currentNonStriker,
+            dismissedBatsmen: dismissed,
+            needsNewBatsman: needsNew,
+          };
+        })(),
       };
     }),
 
@@ -337,6 +418,10 @@ export const useMatchStore = create<MatchState>((set) => ({
           balls: 0,
           deliveries: [],
           matchStatus: 'ongoing',
+          openersSelected: false,
+          needsNewBowler: true,
+          striker: '',
+          nonStriker: '',
         };
       }
       return state;
@@ -345,6 +430,7 @@ export const useMatchStore = create<MatchState>((set) => ({
   resetMatch: () =>
     set({
       matchStarted: false,
+      openersSelected: false,
       team1: '',
       team2: '',
       runs: 0,
@@ -355,6 +441,7 @@ export const useMatchStore = create<MatchState>((set) => ({
       targetScore: 0,
       matchStatus: 'ongoing',
       matchResult: '',
+      needsNewBowler: true,
     }),
 }));
 

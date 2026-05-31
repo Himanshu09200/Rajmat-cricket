@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useMatchStore, DeliveryType, getDeliveryLabel } from '../../store/useMatchStore';
+import { useMatchStore, DeliveryType, getDeliveryLabel, Player } from '../../store/useMatchStore';
 
 // ==========================================
 // CUSTOM SKEUOMORPHIC COMPONENTS
@@ -79,8 +79,8 @@ const HeaderButton = React.memo(({ icon, onPress }: any) => {
 });
 HeaderButton.displayName = 'HeaderButton';
 
-const ScoreBoardCard = React.memo(({ runs, wickets, overs, balls, totalOvers, crr, deliveries }: any) => {
-  const emptyBalls = Array.from({ length: 6 - deliveries.length }).map((_, i) => i);
+const ScoreBoardCard = React.memo(({ runs, wickets, overs, balls, totalOvers, crr, deliveries, battingTeamPlayers }: any) => {
+  const emptyBalls = Array.from({ length: Math.max(0, 6 - deliveries.length) }).map((_, i) => i);
   
   return (
     <View style={{
@@ -134,7 +134,7 @@ const ScoreBoardCard = React.memo(({ runs, wickets, overs, balls, totalOvers, cr
             <Text style={{ fontSize: 10, color: '#888', fontWeight: '800', letterSpacing: 1.5 }}>THIS OVER</Text>
             <Text style={{ fontSize: 10, color: '#666', fontWeight: '600' }}>6-ball over</Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
             {deliveries.length === 0 ? <Text style={{ color: '#888', fontSize: 16 }}>—</Text> : null}
             {deliveries.map((d: any, i: number) => {
               const label = getDeliveryLabel(d);
@@ -142,23 +142,56 @@ const ScoreBoardCard = React.memo(({ runs, wickets, overs, balls, totalOvers, cr
               let textColor = '#FFF';
               
               if (label === 'W') { bgColor = '#FF4757'; }
-              else if (label === 'WD' || label === 'NB') { bgColor = '#FECA57'; textColor = '#000'; }
+              else if (label === 'WD' || label.startsWith('NB')) { bgColor = '#FECA57'; textColor = '#000'; }
               else if (label === '4') { bgColor = '#4AC29A'; }
               else if (label === '6') { bgColor = '#6C8AFF'; }
+
+              // Find player profile for this delivery
+              const strikerPlayer = battingTeamPlayers?.find((p: any) => p.name === d.strikerName);
               
               return (
-                <View key={`d-${i}`} style={{
-                  width: 26, height: 26, borderRadius: 13, backgroundColor: bgColor,
-                  justifyContent: 'center', alignItems: 'center',
-                  shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 3, elevation: 3
-                }}>
-                  <Text style={{ color: textColor, fontSize: 11, fontWeight: '800' }}>{label}</Text>
+                <View key={`d-${i}`} style={{ alignItems: 'center' }}>
+                  {/* Player profile photo above the ball */}
+                  {strikerPlayer?.image ? (
+                    <Image source={strikerPlayer.image} style={{
+                      width: 20, height: 20, borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: bgColor,
+                      marginBottom: 4,
+                    }} />
+                  ) : d.strikerName ? (
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10,
+                      backgroundColor: 'rgba(255,255,255,0.08)',
+                      borderWidth: 1.5,
+                      borderColor: bgColor,
+                      justifyContent: 'center', alignItems: 'center',
+                      marginBottom: 4,
+                    }}>
+                      <Text style={{ fontSize: 8, fontWeight: '800', color: 'rgba(255,255,255,0.5)' }}>
+                        {d.strikerName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ width: 20, height: 20, marginBottom: 4 }} />
+                  )}
+                  {/* Run ball */}
+                  <View style={{
+                    width: 28, height: 28, borderRadius: 14, backgroundColor: bgColor,
+                    justifyContent: 'center', alignItems: 'center',
+                    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 3, elevation: 3
+                  }}>
+                    <Text style={{ color: textColor, fontSize: 11, fontWeight: '800' }}>{label}</Text>
+                  </View>
                 </View>
               );
             })}
             {/* Empty dots */}
             {emptyBalls.map((_, i) => (
-              <View key={`e-${i}`} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+              <View key={`e-${i}`} style={{ alignItems: 'center' }}>
+                <View style={{ width: 20, height: 20, marginBottom: 4 }} />
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+              </View>
             ))}
           </View>
         </View>
@@ -267,7 +300,10 @@ export default function ScoreScreen() {
   const {
     battingTeam, bowlingTeam, runs, wickets, overs, balls,
     totalOvers, addDelivery, undoLastDelivery, endInnings, deliveries,
-    currentInnings, matchStatus, targetScore, matchResult, startSecondInnings
+    currentInnings, matchStatus, targetScore, matchResult, startSecondInnings,
+    team1, team2, team1Players, team2Players, openersSelected, setOpeners,
+    striker, nonStriker, needsNewBatsman, setNextBatsman, dismissedBatsmen,
+    needsNewBowler, setBowler, bowler
   } = matchState;
 
   const currentOverDeliveries = deliveries.filter((d) => d.overIndex === overs);
@@ -277,6 +313,46 @@ export default function ScoreScreen() {
   const [showCustomRun, setShowCustomRun] = useState(false);
   const [customRunValue, setCustomRunValue] = useState('');
   const [showNoBallRuns, setShowNoBallRuns] = useState(false);
+
+  // Opening batsmen selection state
+  const [selectedStriker, setSelectedStriker] = useState<string | null>(null);
+  const [selectedNonStriker, setSelectedNonStriker] = useState<string | null>(null);
+  const [playerPickerFor, setPlayerPickerFor] = useState<'striker' | 'nonStriker' | null>(null);
+
+  // Get batting team players
+  const battingTeamPlayers: Player[] = battingTeam === team1 ? team1Players : team2Players;
+  const battingTeamColor = battingTeam === team1 ? '#4AC29A' : '#6C8AFF';
+
+  // Get bowling team players
+  const bowlingTeamPlayers: Player[] = bowlingTeam === team1 ? team1Players : team2Players;
+  const bowlingTeamColor = bowlingTeam === team1 ? '#4AC29A' : '#6C8AFF';
+
+  const strikerPlayer = battingTeamPlayers.find(p => p.name === selectedStriker);
+  const nonStrikerPlayer = battingTeamPlayers.find(p => p.name === selectedNonStriker);
+
+  const getMaxOversPerBowler = (total: number) => {
+    if (total === 20) return 5;
+    if (total === 10) return 3;
+    if (total === 7) return 3;
+    if (total <= 6) return 2;
+    return Math.ceil(total / 5);
+  };
+  const maxOversLimit = getMaxOversPerBowler(totalOvers);
+
+  const handleConfirmOpeners = () => {
+    if (selectedStriker && selectedNonStriker) {
+      setOpeners(selectedStriker, selectedNonStriker);
+    }
+  };
+
+  const handlePlayerSelect = (playerName: string) => {
+    if (playerPickerFor === 'striker') {
+      setSelectedStriker(playerName);
+    } else if (playerPickerFor === 'nonStriker') {
+      setSelectedNonStriker(playerName);
+    }
+    setPlayerPickerFor(null);
+  };
 
   const handleRun = (runsScored: number) => {
     addDelivery(runsScored, 'legal', false);
@@ -316,6 +392,7 @@ export default function ScoreScreen() {
         <ScoreBoardCard 
           runs={runs} wickets={wickets} overs={overs} balls={balls} 
           totalOvers={totalOvers} crr={crr} deliveries={currentOverDeliveries}
+          battingTeamPlayers={battingTeamPlayers}
         />
 
         {/* RUNS Section */}
@@ -484,6 +561,445 @@ export default function ScoreScreen() {
              <TouchableOpacity style={[styles.overlayBtn, { backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }]} onPress={() => setShowNoBallRuns(false)}>
                 <Text style={[styles.overlayBtnText, { color: '#FFFFFF' }]}>CANCEL</Text>
              </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Opening Batsmen Selection Modal - 2 Slot View */}
+      {!openersSelected && matchStatus === 'ongoing' && !playerPickerFor && (
+        <View style={styles.overlayContainer}>
+          <View style={[styles.overlayCard, { paddingHorizontal: 24, paddingVertical: 28 }]}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 28 }}>
+              <MaterialCommunityIcons name="cricket" size={44} color={battingTeamColor} style={{ marginBottom: 10 }} />
+              <Text style={[styles.overlayTitle, { fontSize: 22, marginBottom: 6 }]}>Select Opening Batsmen</Text>
+              <Text style={[styles.overlaySubtitle, { marginBottom: 0, fontSize: 14 }]}>
+                <Text style={{ color: battingTeamColor, fontWeight: '800' }}>{battingTeam}</Text> is batting
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', width: '100%', gap: 16, marginBottom: 24 }}>
+              {/* Slot 1 - Opener */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setPlayerPickerFor('striker')}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  backgroundColor: selectedStriker ? 'rgba(245, 166, 35, 0.08)' : 'rgba(255,255,255,0.03)',
+                  borderRadius: 16,
+                  borderWidth: 2,
+                  borderColor: selectedStriker ? '#F5A623' : 'rgba(255,255,255,0.1)',
+                  paddingVertical: 20,
+                  paddingHorizontal: 10,
+                }}
+              >
+                {/* Number Badge or Profile Image */}
+                <View style={{
+                  width: 56, height: 56, borderRadius: 28,
+                  backgroundColor: selectedStriker ? 'rgba(245, 166, 35, 0.2)' : 'rgba(255,255,255,0.06)',
+                  borderWidth: 2,
+                  borderColor: selectedStriker ? '#F5A623' : 'rgba(255,255,255,0.15)',
+                  justifyContent: 'center', alignItems: 'center',
+                  marginBottom: 12,
+                  overflow: 'hidden',
+                }}>
+                  {strikerPlayer?.image ? (
+                    <Image source={strikerPlayer.image} style={{ width: 56, height: 56 }} />
+                  ) : selectedStriker ? (
+                    <MaterialCommunityIcons name="account" size={32} color="#F5A623" />
+                  ) : (
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: 'rgba(255,255,255,0.4)' }}>1</Text>
+                  )}
+                </View>
+
+                {/* Label & Selected Name */}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#F5A623', letterSpacing: 1.5, marginBottom: 6, textAlign: 'center' }}>OPENER</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: selectedStriker ? '#FFF' : 'rgba(255,255,255,0.3)', textAlign: 'center' }} numberOfLines={1}>
+                    {selectedStriker || 'Tap to select'}
+                  </Text>
+                  {strikerPlayer?.isCaptain && (
+                    <MaterialCommunityIcons name="star" size={14} color="#F5A623" style={{ marginLeft: 4 }} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Slot 2 - Non-Striker */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setPlayerPickerFor('nonStriker')}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  backgroundColor: selectedNonStriker ? 'rgba(108, 138, 255, 0.08)' : 'rgba(255,255,255,0.03)',
+                  borderRadius: 16,
+                  borderWidth: 2,
+                  borderColor: selectedNonStriker ? '#6C8AFF' : 'rgba(255,255,255,0.1)',
+                  paddingVertical: 20,
+                  paddingHorizontal: 10,
+                }}
+              >
+                {/* Number Badge or Profile Image */}
+                <View style={{
+                  width: 56, height: 56, borderRadius: 28,
+                  backgroundColor: selectedNonStriker ? 'rgba(108, 138, 255, 0.2)' : 'rgba(255,255,255,0.06)',
+                  borderWidth: 2,
+                  borderColor: selectedNonStriker ? '#6C8AFF' : 'rgba(255,255,255,0.15)',
+                  justifyContent: 'center', alignItems: 'center',
+                  marginBottom: 12,
+                  overflow: 'hidden',
+                }}>
+                  {nonStrikerPlayer?.image ? (
+                    <Image source={nonStrikerPlayer.image} style={{ width: 56, height: 56 }} />
+                  ) : selectedNonStriker ? (
+                    <MaterialCommunityIcons name="account" size={32} color="#6C8AFF" />
+                  ) : (
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: 'rgba(255,255,255,0.4)' }}>2</Text>
+                  )}
+                </View>
+
+                {/* Label & Selected Name */}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#6C8AFF', letterSpacing: 1.5, marginBottom: 6, textAlign: 'center' }}>NON-STRIKER</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: selectedNonStriker ? '#FFF' : 'rgba(255,255,255,0.3)', textAlign: 'center' }} numberOfLines={1}>
+                    {selectedNonStriker || 'Tap to select'}
+                  </Text>
+                  {nonStrikerPlayer?.isCaptain && (
+                    <MaterialCommunityIcons name="star" size={14} color="#6C8AFF" style={{ marginLeft: 4 }} />
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Confirm Button */}
+            <TouchableOpacity
+              style={[styles.overlayBtn, {
+                opacity: (selectedStriker && selectedNonStriker) ? 1 : 0.4,
+              }]}
+              disabled={!selectedStriker || !selectedNonStriker}
+              onPress={handleConfirmOpeners}
+            >
+              <Text style={styles.overlayBtnText}>LET'S PLAY 🏏</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Player Picker Sub-Modal */}
+      {playerPickerFor && (
+        <View style={styles.overlayContainer}>
+          <View style={[styles.overlayCard, { paddingHorizontal: 16, paddingVertical: 20, maxHeight: '80%' }]}>
+            {/* Picker Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18, paddingHorizontal: 4 }}>
+              <TouchableOpacity onPress={() => setPlayerPickerFor(null)} style={{ marginRight: 12 }}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFF' }}>
+                  {playerPickerFor === 'striker' ? 'Select Opener' : 'Select Non-Striker'}
+                </Text>
+                <Text style={{ fontSize: 12, color: battingTeamColor, fontWeight: '700', marginTop: 2 }}>
+                  {battingTeam} Players
+                </Text>
+              </View>
+              <View style={{
+                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
+                backgroundColor: playerPickerFor === 'striker' ? 'rgba(245,166,35,0.15)' : 'rgba(108,138,255,0.15)',
+                borderWidth: 1,
+                borderColor: playerPickerFor === 'striker' ? 'rgba(245,166,35,0.4)' : 'rgba(108,138,255,0.4)',
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: playerPickerFor === 'striker' ? '#F5A623' : '#6C8AFF' }}>
+                  {playerPickerFor === 'striker' ? 'OPENER' : 'NON-STRIKER'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 12 }} />
+
+            {/* Player List */}
+            <View style={{ maxHeight: 400, width: '100%' }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 20 }}>
+                {battingTeamPlayers.map((player, index) => {
+                const isAlreadySelectedAsOther =
+                  (playerPickerFor === 'striker' && selectedNonStriker === player.name) ||
+                  (playerPickerFor === 'nonStriker' && selectedStriker === player.name);
+                const accentColor = playerPickerFor === 'striker' ? '#F5A623' : '#6C8AFF';
+
+                return (
+                  <TouchableOpacity
+                    key={`pick-${player.id}`}
+                    activeOpacity={0.8}
+                    disabled={isAlreadySelectedAsOther}
+                    onPress={() => handlePlayerSelect(player.name)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderRadius: 14,
+                      backgroundColor: isAlreadySelectedAsOther ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
+                      marginBottom: 8,
+                      borderWidth: 1.5,
+                      borderColor: isAlreadySelectedAsOther ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
+                      opacity: isAlreadySelectedAsOther ? 0.35 : 1,
+                    }}
+                  >
+                    {/* Player Image or Placeholder */}
+                    {player.image ? (
+                      <Image source={player.image} style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        borderWidth: 2,
+                        borderColor: isAlreadySelectedAsOther ? 'rgba(255,255,255,0.1)' : accentColor,
+                        marginRight: 14,
+                      }} />
+                    ) : (
+                      <View style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderWidth: 2,
+                        borderColor: isAlreadySelectedAsOther ? 'rgba(255,255,255,0.1)' : accentColor,
+                        justifyContent: 'center', alignItems: 'center',
+                        marginRight: 14,
+                      }}>
+                        <MaterialCommunityIcons name="account" size={22} color="rgba(255,255,255,0.4)" />
+                      </View>
+                    )}
+
+                    {/* Player Name */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isAlreadySelectedAsOther ? 'rgba(255,255,255,0.3)' : '#FFF' }}>
+                        {player.name}
+                      </Text>
+                      {isAlreadySelectedAsOther && (
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>
+                          Already selected as {playerPickerFor === 'striker' ? 'Non-Striker' : 'Opener'}
+                        </Text>
+                      )}
+                      {player.isCaptain && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <MaterialCommunityIcons name="star" size={12} color="#F5A623" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#F5A623', marginLeft: 3 }}>Captain</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Select arrow */}
+                    {!isAlreadySelectedAsOther && (
+                      <MaterialCommunityIcons name="chevron-right" size={22} color={accentColor} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          </View>
+        </View>
+      )}
+
+      {/* Next Batsman Selection Modal */}
+      {needsNewBatsman && matchStatus === 'ongoing' && (
+        <View style={styles.overlayContainer}>
+          <View style={[styles.overlayCard, { paddingHorizontal: 16, paddingVertical: 20, maxHeight: '80%' }]}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 18 }}>
+              <MaterialCommunityIcons name="account-alert" size={36} color="#FF4757" style={{ marginBottom: 8 }} />
+              <Text style={[styles.overlayTitle, { fontSize: 20, color: '#FF4757' }]}>Wicket Fell!</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Select the next batsman</Text>
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 12 }} />
+
+            {/* Player List */}
+            <View style={{ maxHeight: 400, width: '100%' }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 20 }}>
+                {battingTeamPlayers.map((player) => {
+                const isDismissed = dismissedBatsmen.includes(player.name);
+                const isPlaying = striker === player.name || nonStriker === player.name;
+                const isUnavailable = isDismissed || isPlaying;
+
+                return (
+                  <TouchableOpacity
+                    key={`next-${player.id}`}
+                    activeOpacity={0.8}
+                    disabled={isUnavailable}
+                    onPress={() => setNextBatsman(player.name)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderRadius: 14,
+                      backgroundColor: isUnavailable ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
+                      marginBottom: 8,
+                      borderWidth: 1.5,
+                      borderColor: isUnavailable ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
+                      opacity: isUnavailable ? 0.35 : 1, // Blur effect
+                    }}
+                  >
+                    {/* Player Image or Placeholder */}
+                    {player.image ? (
+                      <Image source={player.image} style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        borderWidth: 2,
+                        borderColor: isUnavailable ? 'rgba(255,255,255,0.1)' : '#F5A623',
+                        marginRight: 14,
+                      }} />
+                    ) : (
+                      <View style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderWidth: 2,
+                        borderColor: isUnavailable ? 'rgba(255,255,255,0.1)' : '#F5A623',
+                        justifyContent: 'center', alignItems: 'center',
+                        marginRight: 14,
+                      }}>
+                        <MaterialCommunityIcons name="account" size={22} color="rgba(255,255,255,0.4)" />
+                      </View>
+                    )}
+
+                    {/* Player Name */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isUnavailable ? 'rgba(255,255,255,0.3)' : '#FFF' }}>
+                        {player.name}
+                      </Text>
+                      {isDismissed && (
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#FF4757', marginTop: 2 }}>
+                          Dismissed
+                        </Text>
+                      )}
+                      {isPlaying && !isDismissed && (
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>
+                          Currently playing
+                        </Text>
+                      )}
+                      {player.isCaptain && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <MaterialCommunityIcons name="star" size={12} color="#F5A623" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#F5A623', marginLeft: 3 }}>Captain</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Select arrow */}
+                    {!isUnavailable && (
+                      <MaterialCommunityIcons name="chevron-right" size={22} color="#F5A623" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          </View>
+        </View>
+      )}
+
+      {/* Select Bowler Modal */}
+      {openersSelected && needsNewBowler && matchStatus === 'ongoing' && !needsNewBatsman && (
+        <View style={styles.overlayContainer}>
+          <View style={[styles.overlayCard, { paddingHorizontal: 16, paddingVertical: 20, maxHeight: '80%' }]}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 18 }}>
+              <MaterialCommunityIcons name="cricket" size={36} color={bowlingTeamColor} style={{ marginBottom: 8 }} />
+              <Text style={[styles.overlayTitle, { fontSize: 20, color: '#FFF' }]}>Select Bowler</Text>
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                <Text style={{ color: bowlingTeamColor, fontWeight: '800' }}>{bowlingTeam}</Text> is bowling this over
+              </Text>
+            </View>
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 12 }} />
+
+            {/* Player List */}
+            <View style={{ maxHeight: 400, width: '100%' }}>
+              <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 20 }}>
+                {bowlingTeamPlayers.map((player) => {
+                // Technically a bowler can't bowl two consecutive overs
+                const isJustBowled = overs > 0 && bowler === player.name;
+
+                // Calculate how many overs this player has completed
+                const legalBalls = deliveries.filter(
+                  (d) => d.bowlerName === player.name && (d.type === 'legal' || d.type === 'bye' || d.type === 'legBye')
+                ).length;
+                const completedOvers = Math.floor(legalBalls / 6);
+                const isMaxReached = completedOvers >= maxOversLimit;
+
+                const isDisabled = isJustBowled || isMaxReached;
+
+                return (
+                  <TouchableOpacity
+                    key={`bowler-${player.id}`}
+                    activeOpacity={0.8}
+                    disabled={isDisabled}
+                    onPress={() => setBowler(player.name)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                      borderRadius: 14,
+                      backgroundColor: isDisabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
+                      marginBottom: 8,
+                      borderWidth: 1.5,
+                      borderColor: isDisabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
+                      opacity: isDisabled ? 0.35 : 1, // Blur effect
+                    }}
+                  >
+                    {/* Player Image or Placeholder */}
+                    {player.image ? (
+                      <Image source={player.image} style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        borderWidth: 2,
+                        borderColor: isDisabled ? 'rgba(255,255,255,0.1)' : bowlingTeamColor,
+                        marginRight: 14,
+                      }} />
+                    ) : (
+                      <View style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderWidth: 2,
+                        borderColor: isDisabled ? 'rgba(255,255,255,0.1)' : bowlingTeamColor,
+                        justifyContent: 'center', alignItems: 'center',
+                        marginRight: 14,
+                      }}>
+                        <MaterialCommunityIcons name="account" size={22} color="rgba(255,255,255,0.4)" />
+                      </View>
+                    )}
+
+                    {/* Player Name */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: isDisabled ? 'rgba(255,255,255,0.3)' : '#FFF' }}>
+                        {player.name}
+                      </Text>
+                      {isJustBowled && !isMaxReached && (
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#FF4757', marginTop: 2 }}>
+                          Bowled last over
+                        </Text>
+                      )}
+                      {isMaxReached && (
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#FF4757', marginTop: 2 }}>
+                          Max overs reached ({maxOversLimit})
+                        </Text>
+                      )}
+                      {player.isCaptain && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <MaterialCommunityIcons name="star" size={12} color="#F5A623" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#F5A623', marginLeft: 3 }}>Captain</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Select arrow */}
+                    {!isDisabled && (
+                      <MaterialCommunityIcons name="chevron-right" size={22} color={bowlingTeamColor} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
           </View>
         </View>
       )}
