@@ -59,6 +59,16 @@ export interface MatchState {
   matchStatus: 'ongoing' | 'inningsBreak' | 'completed';
   matchResult: string;
 
+  // 1st Innings Snapshot (preserved after transition)
+  innings1Deliveries: Delivery[];
+  innings1Runs: number;
+  innings1Wickets: number;
+  innings1Overs: number;
+  innings1Balls: number;
+  innings1BattingTeam: string;
+  innings1BowlingTeam: string;
+  innings1DismissedBatsmen: string[];
+
   // Player management
   addPlayer: (team: 'team1' | 'team2', name: string) => void;
   removePlayer: (team: 'team1' | 'team2', playerId: string) => void;
@@ -117,6 +127,15 @@ export const useMatchStore = create<MatchState>((set) => ({
   targetScore: 0,
   matchStatus: 'ongoing',
   matchResult: '',
+
+  innings1Deliveries: [],
+  innings1Runs: 0,
+  innings1Wickets: 0,
+  innings1Overs: 0,
+  innings1Balls: 0,
+  innings1BattingTeam: '',
+  innings1BowlingTeam: '',
+  innings1DismissedBatsmen: [],
 
   addPlayer: (team, name) => set((state) => {
     const key = team === 'team1' ? 'team1Players' : 'team2Players';
@@ -228,7 +247,10 @@ export const useMatchStore = create<MatchState>((set) => ({
         return state;
       }
 
-      if (state.wickets >= 10 || state.overs >= state.totalOvers) {
+      const battingPlayers = state.battingTeam === state.team1 ? state.team1Players : state.team2Players;
+      const maxWickets = battingPlayers.length; // SOLO MODE: All players can bat.
+
+      if (state.wickets >= maxWickets || state.overs >= state.totalOvers) {
         return state;
       }
 
@@ -274,17 +296,17 @@ export const useMatchStore = create<MatchState>((set) => ({
       // Check for 2nd innings win by chasing team
       if (state.currentInnings === 2 && newRuns >= state.targetScore) {
         newMatchStatus = 'completed';
-        newMatchResult = `${state.battingTeam} won by ${10 - newWickets} wickets`;
+        newMatchResult = `${state.battingTeam} won by ${maxWickets - newWickets} wickets`;
       } 
       // Check if innings is over (all out or overs completed)
-      else if (newWickets >= 10 || (newOvers >= state.totalOvers && newBalls === 0)) {
+      else if (newWickets >= maxWickets || (newOvers >= state.totalOvers && newBalls === 0)) {
         if (state.currentInnings === 1) {
           newMatchStatus = 'inningsBreak';
           newTargetScore = newRuns + 1;
         } else {
           newMatchStatus = 'completed';
           if (newRuns >= state.targetScore) {
-             newMatchResult = `${state.battingTeam} won by ${10 - newWickets} wickets`;
+             newMatchResult = `${state.battingTeam} won by ${maxWickets - newWickets} wickets`;
           } else if (newRuns === state.targetScore - 1) {
              newMatchResult = `Match Tied`;
           } else {
@@ -313,27 +335,36 @@ export const useMatchStore = create<MatchState>((set) => ({
           // If wicket fell, dismiss the striker
           if (isWicket) {
             dismissed.push(currentStriker);
-            needsNew = true;
-            // Don't rotate on wicket - new batsman will replace striker
-            // But still check for end of over swap
-            if (isLegal && newBalls === 0 && newOvers > state.overs) {
-              // End of over: non-striker goes to striker end
+            
+            // Solo Mode Check: If only 1 player remains
+            if (newWickets >= maxWickets - 1) {
+              needsNew = false;
+              // The non-striker becomes the sole striker
               currentStriker = currentNonStriker;
-              currentNonStriker = ''; // will be replaced by new batsman
+              currentNonStriker = '';
             } else {
-              currentStriker = ''; // will be replaced by new batsman
+              needsNew = true;
+              // Don't rotate on wicket - new batsman will replace striker
+              // But still check for end of over swap
+              if (isLegal && newBalls === 0 && newOvers > state.overs) {
+                // End of over: non-striker goes to striker end
+                currentStriker = currentNonStriker;
+                currentNonStriker = ''; // will be replaced by new batsman
+              } else {
+                currentStriker = ''; // will be replaced by new batsman
+              }
             }
           } else {
             // Determine runs for strike rotation
             const runsForRotation = type === 'wide' ? 0 : runs;
 
-            // Swap on odd runs
-            if (runsForRotation % 2 === 1) {
+            // Swap on odd runs (only if non-striker exists)
+            if (runsForRotation % 2 === 1 && currentNonStriker !== '') {
               [currentStriker, currentNonStriker] = [currentNonStriker, currentStriker];
             }
 
-            // Swap at end of over (after 6 legal balls)
-            if (isLegal && newBalls === 0 && newOvers > state.overs) {
+            // Swap at end of over (after 6 legal balls, only if non-striker exists)
+            if (isLegal && newBalls === 0 && newOvers > state.overs && currentNonStriker !== '') {
               [currentStriker, currentNonStriker] = [currentNonStriker, currentStriker];
             }
           }
@@ -383,6 +414,9 @@ export const useMatchStore = create<MatchState>((set) => ({
 
   endInnings: () =>
     set((state) => {
+      const battingPlayers = state.battingTeam === state.team1 ? state.team1Players : state.team2Players;
+      const maxWickets = battingPlayers.length; // SOLO MODE
+
       if (state.currentInnings === 1 && state.matchStatus === 'ongoing') {
         return {
           matchStatus: 'inningsBreak',
@@ -391,7 +425,7 @@ export const useMatchStore = create<MatchState>((set) => ({
       } else if (state.currentInnings === 2 && state.matchStatus === 'ongoing') {
         let result = '';
         if (state.runs >= state.targetScore) {
-          result = `${state.battingTeam} won by ${10 - state.wickets} wickets`;
+          result = `${state.battingTeam} won by ${maxWickets - state.wickets} wickets`;
         } else if (state.runs === state.targetScore - 1) {
           result = `Match Tied`;
         } else {
@@ -409,6 +443,16 @@ export const useMatchStore = create<MatchState>((set) => ({
     set((state) => {
       if (state.currentInnings === 1 && state.matchStatus === 'inningsBreak') {
         return {
+          // Snapshot the 1st innings data
+          innings1Deliveries: state.deliveries,
+          innings1Runs: state.runs,
+          innings1Wickets: state.wickets,
+          innings1Overs: state.overs,
+          innings1Balls: state.balls,
+          innings1BattingTeam: state.battingTeam,
+          innings1BowlingTeam: state.bowlingTeam,
+          innings1DismissedBatsmen: state.dismissedBatsmen,
+          // Reset for 2nd innings
           currentInnings: 2,
           battingTeam: state.bowlingTeam,
           bowlingTeam: state.battingTeam,
@@ -417,9 +461,11 @@ export const useMatchStore = create<MatchState>((set) => ({
           overs: 0,
           balls: 0,
           deliveries: [],
+          dismissedBatsmen: [],
           matchStatus: 'ongoing',
           openersSelected: false,
           needsNewBowler: true,
+          needsNewBatsman: false,
           striker: '',
           nonStriker: '',
         };

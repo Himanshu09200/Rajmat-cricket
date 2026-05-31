@@ -26,7 +26,7 @@ export default function Index() {
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>RAJMAT</Text>
+        <Text style={styles.title}>RAJMATH</Text>
         <Text style={styles.subtitle}>CRICKET</Text>
         <View style={styles.divider} />
         <Text style={styles.tagline}>Professional Cricket Scoring</Text>

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Rajmat-cricket",
-    "slug": "Rajmat-cricket",
+    "name": "Rajmath-cricket",
+    "slug": "Rajmath-cricket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rajmatcricket",
+    "scheme": "rajmathcricket",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

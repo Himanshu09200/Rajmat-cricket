@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Image, Animated, Dimensions, Easing } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useMatchStore, DeliveryType, getDeliveryLabel, Player } from '../../store/useMatchStore';
+import { useMatchStore, DeliveryType, getDeliveryLabel, Player, Delivery } from '../../store/useMatchStore';
 
 // ==========================================
 // CUSTOM SKEUOMORPHIC COMPONENTS
@@ -291,6 +291,459 @@ const ActionButton = React.memo(({ icon, label, onPress, type }: any) => {
 ActionButton.displayName = 'ActionButton';
 
 // ==========================================
+// CONFETTI ANIMATION
+// ==========================================
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const CONFETTI_COLORS = ['#F5A623', '#FF4757', '#4AC29A', '#6C8AFF', '#FECA57', '#FF6B6B', '#A29BFE', '#FD79A8', '#00CEFF'];
+
+const ConfettiPiece = React.memo(({ delay, index }: { delay: number; index: number }) => {
+  const fall = useRef(new Animated.Value(-50)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  const sway = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  const xStart = useMemo(() => Math.random() * SCREEN_WIDTH, []);
+  const size = useMemo(() => 6 + Math.random() * 8, []);
+  const color = useMemo(() => CONFETTI_COLORS[index % CONFETTI_COLORS.length], [index]);
+  const duration = useMemo(() => 2500 + Math.random() * 2000, []);
+  const swayAmount = useMemo(() => 30 + Math.random() * 60, []);
+  const isSquare = useMemo(() => Math.random() > 0.5, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fall, {
+          toValue: SCREEN_HEIGHT + 100,
+          duration,
+          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
+          useNativeDriver: true,
+        }),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(sway, { toValue: swayAmount, duration: duration / 4, useNativeDriver: true }),
+            Animated.timing(sway, { toValue: -swayAmount, duration: duration / 2, useNativeDriver: true }),
+            Animated.timing(sway, { toValue: 0, duration: duration / 4, useNativeDriver: true }),
+          ])
+        ),
+        Animated.loop(
+          Animated.timing(spin, { toValue: 1, duration: 800 + Math.random() * 1200, useNativeDriver: true })
+        ),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration,
+          delay: duration * 0.6,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const rotateZ = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: xStart,
+        top: 0,
+        width: size,
+        height: isSquare ? size : size * 2.5,
+        backgroundColor: color,
+        borderRadius: isSquare ? 2 : size / 2,
+        opacity,
+        transform: [{ translateY: fall }, { translateX: sway }, { rotateZ }],
+      }}
+    />
+  );
+});
+ConfettiPiece.displayName = 'ConfettiPiece';
+
+const ConfettiExplosion = React.memo(() => {
+  const pieces = useMemo(() => {
+    return Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      delay: Math.random() * 1500,
+    }));
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {pieces.map((p) => (
+        <ConfettiPiece key={p.id} index={p.id} delay={p.delay} />
+      ))}
+    </View>
+  );
+});
+ConfettiExplosion.displayName = 'ConfettiExplosion';
+
+// ==========================================
+// MATCH OVER CELEBRATION SCREEN
+// ==========================================
+
+interface MOTMResult {
+  player: Player;
+  battingRuns: number;
+  wickets: number;
+  totalScore: number;
+}
+
+const calculateMOTM = (
+  winnerTeamName: string,
+  team1: string, team2: string,
+  team1Players: Player[], team2Players: Player[],
+  inn1Deliveries: Delivery[], inn2Deliveries: Delivery[],
+  inn1BattingTeam: string,
+): MOTMResult | null => {
+  const winnerPlayers = winnerTeamName === team1 ? team1Players : team2Players;
+  const allDeliveries = [...inn1Deliveries, ...inn2Deliveries];
+
+  // Did the winner bat in innings 1 or 2?
+  const winnerBattedInInnings1 = inn1BattingTeam === winnerTeamName;
+  const battingDeliveries = winnerBattedInInnings1 ? inn1Deliveries : inn2Deliveries;
+  const bowlingDeliveries = winnerBattedInInnings1 ? inn2Deliveries : inn1Deliveries;
+
+  let bestPlayer: MOTMResult | null = null;
+
+  winnerPlayers.forEach((player) => {
+    // Batting: sum of runs scored by this player
+    let battingRuns = 0;
+    battingDeliveries
+      .filter((d) => d.strikerName === player.name)
+      .forEach((d) => { battingRuns += d.runs; });
+
+    // Bowling: count wickets taken by this player (exclude runouts)
+    let wicketsTaken = 0;
+    bowlingDeliveries
+      .filter((d) => d.bowlerName === player.name && d.isWicket)
+      .filter((d) => d.wicketType !== 'runOut' && d.wicketType !== 'retiredHurt' && d.wicketType !== 'obstructingField' && d.wicketType !== 'timedOut')
+      .forEach(() => { wicketsTaken++; });
+
+    const totalScore = battingRuns * 1 + wicketsTaken * 5;
+
+    if (!bestPlayer || totalScore > bestPlayer.totalScore) {
+      bestPlayer = { player, battingRuns, wickets: wicketsTaken, totalScore };
+    }
+  });
+
+  return bestPlayer;
+};
+
+interface MatchOverScreenProps {
+  matchResult: string;
+  team1: string;
+  team2: string;
+  team1Players: Player[];
+  team2Players: Player[];
+  inn1Deliveries: Delivery[];
+  inn2Deliveries: Delivery[];
+  inn1BattingTeam: string;
+  onGoHome: () => void;
+  onViewScorecard: () => void;
+}
+
+const MatchOverScreen = React.memo(({
+  matchResult, team1, team2, team1Players, team2Players,
+  inn1Deliveries, inn2Deliveries, inn1BattingTeam,
+  onGoHome, onViewScorecard,
+}: MatchOverScreenProps) => {
+  // Determine winning team from matchResult
+  let winnerTeam = '';
+  if (matchResult.includes(team1)) {
+    winnerTeam = team1;
+  } else if (matchResult.includes(team2)) {
+    winnerTeam = team2;
+  }
+
+  const motm = winnerTeam
+    ? calculateMOTM(winnerTeam, team1, team2, team1Players, team2Players, inn1Deliveries, inn2Deliveries, inn1BattingTeam)
+    : null;
+
+  // Animations
+  const bannerScale = useRef(new Animated.Value(0)).current;
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const trophyBounce = useRef(new Animated.Value(0)).current;
+  const motmSlide = useRef(new Animated.Value(60)).current;
+  const motmOpacity = useRef(new Animated.Value(0)).current;
+  const btnOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      // Trophy bounce in
+      Animated.spring(trophyBounce, { toValue: 1, friction: 4, tension: 60, useNativeDriver: true }),
+      // Banner reveal
+      Animated.parallel([
+        Animated.spring(bannerScale, { toValue: 1, friction: 5, useNativeDriver: true }),
+        Animated.timing(bannerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+      // MOTM card slide up
+      Animated.parallel([
+        Animated.spring(motmSlide, { toValue: 0, friction: 6, useNativeDriver: true }),
+        Animated.timing(motmOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+      // Buttons fade in
+      Animated.timing(btnOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const trophyScale = trophyBounce.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+
+  return (
+    <View style={celebStyles.container}>
+      <LinearGradient colors={['#0B1120', '#1A1030', '#0B1120']} style={StyleSheet.absoluteFillObject} />
+
+      {/* Confetti */}
+      <ConfettiExplosion />
+
+      {/* Radial glow behind trophy */}
+      <View style={celebStyles.glowCircle} />
+
+      <ScrollView contentContainerStyle={celebStyles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Trophy */}
+        <Animated.View style={{ transform: [{ scale: trophyScale }], marginBottom: 16 }}>
+          <View style={celebStyles.trophyRing}>
+            <MaterialCommunityIcons name="trophy" size={64} color="#F5A623" />
+          </View>
+        </Animated.View>
+
+        {/* Victory Banner */}
+        <Animated.View style={[celebStyles.bannerContainer, { opacity: bannerOpacity, transform: [{ scale: bannerScale }] }]}>
+          <Text style={celebStyles.matchOverLabel}>MATCH OVER</Text>
+          {winnerTeam ? (
+            <Text style={celebStyles.winnerText}>{winnerTeam} Wins! 🏆</Text>
+          ) : (
+            <Text style={celebStyles.winnerText}>Match Tied!</Text>
+          )}
+          <Text style={celebStyles.resultDetail}>{matchResult}</Text>
+        </Animated.View>
+
+        {/* Man of the Match */}
+        {motm && (
+          <Animated.View style={[celebStyles.motmCard, { opacity: motmOpacity, transform: [{ translateY: motmSlide }] }]}>
+            <LinearGradient
+              colors={['rgba(245,166,35,0.12)', 'rgba(245,166,35,0.02)']}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Text style={celebStyles.motmLabel}>⭐ MAN OF THE MATCH ⭐</Text>
+
+            {/* Profile */}
+            <View style={celebStyles.motmProfileRing}>
+              {motm.player.image ? (
+                <Image source={motm.player.image} style={celebStyles.motmProfileImg} />
+              ) : (
+                <View style={[celebStyles.motmProfileImg, celebStyles.motmPlaceholder]}>
+                  <MaterialCommunityIcons name="account" size={48} color="rgba(255,255,255,0.3)" />
+                </View>
+              )}
+            </View>
+
+            <Text style={celebStyles.motmName}>{motm.player.name}</Text>
+
+            {/* Stats Row */}
+            <View style={celebStyles.motmStatsRow}>
+              <View style={celebStyles.motmStatCol}>
+                <Text style={celebStyles.motmStatValue}>{motm.battingRuns}</Text>
+                <Text style={celebStyles.motmStatLabel}>Runs</Text>
+              </View>
+              <View style={celebStyles.motmStatDivider} />
+              <View style={celebStyles.motmStatCol}>
+                <Text style={celebStyles.motmStatValue}>{motm.wickets}</Text>
+                <Text style={celebStyles.motmStatLabel}>Wickets</Text>
+              </View>
+              <View style={celebStyles.motmStatDivider} />
+              <View style={celebStyles.motmStatCol}>
+                <Text style={[celebStyles.motmStatValue, { color: '#F5A623' }]}>{motm.totalScore}</Text>
+                <Text style={celebStyles.motmStatLabel}>Points</Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Action Buttons */}
+        <Animated.View style={[celebStyles.btnRow, { opacity: btnOpacity }]}>
+          <TouchableOpacity style={celebStyles.viewScorecardBtn} onPress={onViewScorecard}>
+            <MaterialCommunityIcons name="scoreboard" size={18} color="#FFF" />
+            <Text style={celebStyles.viewScorecardText}>VIEW SCORECARD</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={celebStyles.goHomeBtn} onPress={onGoHome}>
+            <Text style={celebStyles.goHomeText}>BACK TO HOME</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
+    </View>
+  );
+});
+MatchOverScreen.displayName = 'MatchOverScreen';
+
+const celebStyles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 200,
+  },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  glowCircle: {
+    position: 'absolute',
+    top: '15%',
+    alignSelf: 'center',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(245,166,35,0.06)',
+  },
+  trophyRing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#F5A623',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245,166,35,0.08)',
+  },
+  bannerContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  matchOverLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 4,
+    marginBottom: 8,
+  },
+  winnerText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#FFF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  resultDetail: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+  },
+  // MOTM Card
+  motmCard: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(245,166,35,0.25)',
+    padding: 24,
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 32,
+  },
+  motmLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#F5A623',
+    letterSpacing: 2,
+    marginBottom: 16,
+  },
+  motmProfileRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 3,
+    borderColor: '#F5A623',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(245,166,35,0.05)',
+  },
+  motmProfileImg: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  motmPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  motmName: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFF',
+    marginBottom: 16,
+  },
+  motmStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  motmStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  motmStatValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  motmStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  motmStatDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  // Buttons
+  btnRow: {
+    width: '100%',
+    gap: 12,
+  },
+  viewScorecardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 16,
+    borderRadius: 30,
+  },
+  viewScorecardText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 1,
+  },
+  goHomeBtn: {
+    backgroundColor: '#F5A623',
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: 'center',
+  },
+  goHomeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0B1120',
+    letterSpacing: 1.5,
+  },
+});
+
+// ==========================================
 // MAIN SCREEN
 // ==========================================
 
@@ -303,7 +756,8 @@ export default function ScoreScreen() {
     currentInnings, matchStatus, targetScore, matchResult, startSecondInnings,
     team1, team2, team1Players, team2Players, openersSelected, setOpeners,
     striker, nonStriker, needsNewBatsman, setNextBatsman, dismissedBatsmen,
-    needsNewBowler, setBowler, bowler
+    needsNewBowler, setBowler, bowler,
+    innings1Deliveries, innings1BattingTeam,
   } = matchState;
 
   const currentOverDeliveries = deliveries.filter((d) => d.overIndex === overs);
@@ -471,16 +925,18 @@ export default function ScoreScreen() {
       )}
 
       {matchStatus === 'completed' && (
-        <View style={styles.overlayContainer}>
-          <View style={styles.overlayCard}>
-             <MaterialCommunityIcons name="trophy" size={48} color="#F5A623" style={{marginBottom: 10}}/>
-             <Text style={styles.overlayTitle}>Match Completed</Text>
-             <Text style={styles.overlaySubtitle}>{matchResult}</Text>
-             <TouchableOpacity style={styles.overlayBtn} onPress={() => router.replace('/(tabs)/home' as any)}>
-                <Text style={styles.overlayBtnText}>BACK TO HOME</Text>
-             </TouchableOpacity>
-          </View>
-        </View>
+        <MatchOverScreen
+          matchResult={matchResult}
+          team1={team1}
+          team2={team2}
+          team1Players={team1Players}
+          team2Players={team2Players}
+          inn1Deliveries={innings1Deliveries}
+          inn2Deliveries={deliveries}
+          inn1BattingTeam={innings1BattingTeam || battingTeam}
+          onGoHome={() => router.replace('/(tabs)/home' as any)}
+          onViewScorecard={() => router.push('/match/scoreboard' as any)}
+        />
       )}
 
       {showCustomRun && (
