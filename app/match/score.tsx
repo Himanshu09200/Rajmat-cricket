@@ -415,9 +415,22 @@ export default function ScoreScreen() {
                style={styles.customInput}
                keyboardType="number-pad"
                value={customRunValue}
-               onChangeText={setCustomRunValue}
+               onChangeText={(text) => {
+                 const cleaned = text.replace(/[^0-9]/g, '');
+                 if (!cleaned) {
+                   setCustomRunValue('');
+                   return;
+                 }
+                 const val = parseInt(cleaned, 10);
+                 if (val <= 10) {
+                   setCustomRunValue(val.toString());
+                 } else {
+                   setCustomRunValue('10');
+                 }
+               }}
                placeholder="e.g. 5, 7"
                placeholderTextColor="rgba(255,255,255,0.2)"
+               maxLength={2}
                autoFocus
              />
              <View style={styles.overlayRowBtn}>
@@ -425,14 +438,18 @@ export default function ScoreScreen() {
                   <Text style={[styles.overlayBtnText, { color: '#FFFFFF' }]}>CANCEL</Text>
                </TouchableOpacity>
                <View style={{ width: 12 }} />
-               <TouchableOpacity style={[styles.overlayBtn, { flex: 1 }]} onPress={() => {
-                 const val = parseInt(customRunValue, 10);
-                 if (!isNaN(val)) {
-                   handleRun(val);
-                   setShowCustomRun(false);
-                   setCustomRunValue('');
-                 }
-               }}>
+               <TouchableOpacity 
+                 style={[styles.overlayBtn, { flex: 1, opacity: customRunValue === '' ? 0.5 : 1 }]} 
+                 disabled={customRunValue === ''}
+                 onPress={() => {
+                   const val = parseInt(customRunValue, 10);
+                   if (!isNaN(val) && val <= 10) {
+                     handleRun(val);
+                     setShowCustomRun(false);
+                     setCustomRunValue('');
+                   }
+                 }}
+               >
                   <Text style={styles.overlayBtnText}>ADD RUNS</Text>
                </TouchableOpacity>
              </View>

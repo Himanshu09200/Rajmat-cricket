@@ -597,6 +597,23 @@ export default function StartMatchScreen() {
     }
   };
 
+  const assignCommonPlayer = (rosterPlayer: any) => {
+    const inTeam1 = team1Players.some(p => p.name === rosterPlayer.name);
+    const inTeam2 = team2Players.some(p => p.name === rosterPlayer.name);
+    if (!inTeam1) {
+      const slot1 = team1Players.findIndex(p => p.name.startsWith('Player '));
+      if (slot1 !== -1) {
+        updatePlayer('team1', team1Players[slot1].id, rosterPlayer.name, rosterPlayer.image);
+      }
+    }
+    if (!inTeam2) {
+      const slot2 = team2Players.findIndex(p => p.name.startsWith('Player '));
+      if (slot2 !== -1) {
+        updatePlayer('team2', team2Players[slot2].id, rosterPlayer.name, rosterPlayer.image);
+      }
+    }
+  };
+
   const handleStartMatch = () => {
     // Resolve current text values for setup
     const t1Name = team1.trim() || 'Team A';
@@ -798,16 +815,69 @@ export default function StartMatchScreen() {
               <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 12 }}>
                 <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8, fontWeight: '700' }}>SELECT FROM ROSTER</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                  {ROSTER_PLAYERS.map(rp => (
-                    <TouchableOpacity 
-                      key={rp.id} 
-                      onPress={() => assignRosterPlayer(rp)}
-                      style={{ alignItems: 'center' }}
-                    >
-                      <Image source={rp.image} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#F5A623', marginBottom: 4 }} />
-                      <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '600' }}>{rp.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {(() => {
+                    const hasCommonPlayer = ROSTER_PLAYERS.some(rp => 
+                      team1Players.some(p => p.name === rp.name) && team2Players.some(p => p.name === rp.name)
+                    );
+                    return ROSTER_PLAYERS.map(rp => {
+                    const inTeam1 = team1Players.some(p => p.name === rp.name);
+                    const inTeam2 = team2Players.some(p => p.name === rp.name);
+                    const isCommon = inTeam1 && inTeam2;
+                    const isUsed = inTeam1 || inTeam2;
+                    return (
+                      <View key={rp.id} style={{ alignItems: 'center', opacity: isUsed && !isCommon ? 0.3 : 1 }}>
+                        <TouchableOpacity 
+                          onPress={() => !isUsed && assignRosterPlayer(rp)}
+                          disabled={isUsed}
+                          style={{ alignItems: 'center' }}
+                        >
+                          <Image source={rp.image} style={[
+                            { width: 44, height: 44, borderRadius: 22, borderWidth: 2, marginBottom: 4 },
+                            isCommon
+                              ? { borderColor: '#A855F7' }
+                              : isUsed 
+                                ? { borderColor: 'rgba(255,255,255,0.15)' } 
+                                : { borderColor: '#F5A623' }
+                          ]} />
+                          <Text style={{ color: isUsed && !isCommon ? 'rgba(255,255,255,0.3)' : '#FFF', fontSize: 10, fontWeight: '600' }}>{rp.name}</Text>
+                          {isUsed && !isCommon && (
+                            <View style={{ position: 'absolute', top: 12, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
+                              <MaterialCommunityIcons name="check-circle" size={14} color="rgba(74, 194, 154, 0.7)" />
+                            </View>
+                          )}
+                          {isCommon && (
+                            <View style={{ position: 'absolute', top: 12, backgroundColor: 'rgba(168, 85, 247, 0.85)', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1 }}>
+                              <MaterialCommunityIcons name="account-switch" size={14} color="#FFF" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {/* Common Player Toggle - only show if no common player exists yet */}
+                        {!isCommon && !hasCommonPlayer && (
+                          <TouchableOpacity
+                            onPress={() => assignCommonPlayer(rp)}
+                            style={{
+                              marginTop: 4,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                              borderRadius: 8,
+                              paddingHorizontal: 5,
+                              paddingVertical: 2,
+                              borderWidth: 1,
+                              borderColor: 'rgba(168, 85, 247, 0.4)',
+                            }}
+                          >
+                            <MaterialCommunityIcons name="account-switch-outline" size={10} color="#A855F7" />
+                            <Text style={{ fontSize: 7, color: '#A855F7', fontWeight: '800', marginLeft: 2 }}>BOTH</Text>
+                          </TouchableOpacity>
+                        )}
+                        {isCommon && (
+                          <Text style={{ fontSize: 7, color: '#A855F7', fontWeight: '800', marginTop: 2 }}>COMMON</Text>
+                        )}
+                      </View>
+                    );
+                  });
+                  })()}
                 </ScrollView>
               </View>
             </LinearGradient>
