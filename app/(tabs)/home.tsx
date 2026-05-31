@@ -39,7 +39,7 @@ export default function HomeScreen() {
             />
             <View style={styles.glowInner}>
                <Image
-                source={require('../../assets/images/cricket-logo.png')}
+                source={require('../../assets/images/cricket_logo.png')}
                 style={styles.heroLogo}
                 resizeMode="contain"
               />

@@ -19,7 +19,7 @@ export default function Index() {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
-            source={require('../assets/images/cricket-logo.png')}
+            source={require('../assets/images/cricket_logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
