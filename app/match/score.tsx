@@ -994,7 +994,7 @@ export default function ScoreScreen() {
         <View style={styles.overlayContainer}>
           <View style={styles.overlayCard}>
              <Text style={styles.overlayTitle}>No Ball Runs</Text>
-             <Text style={styles.overlaySubtitle}>Select batsman's runs off the No Ball</Text>
+             <Text style={styles.overlaySubtitle}>Select batsman&apos;s runs off the No Ball</Text>
              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 24 }}>
                {[0, 1, 2, 3, 4, 6].map(runsOffNoBall => (
                  <TouchableOpacity
@@ -1136,7 +1136,7 @@ export default function ScoreScreen() {
               disabled={!selectedStriker || !selectedNonStriker}
               onPress={handleConfirmOpeners}
             >
-              <Text style={styles.overlayBtnText}>LET'S PLAY 🏏</Text>
+              <Text style={styles.overlayBtnText}>LET&apos;S PLAY 🏏</Text>
             </TouchableOpacity>
           </View>
         </View>
